@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Playground Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=0.8">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    html, body, #map {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+
+    #searchBox {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      width: 240px;
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    #suggestionBox {
+      position: absolute;
+      top: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      width: 240px;
+      background: white;
+      border: 1px solid #ccc;
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .suggestion {
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .suggestion:hover {
+      background-color: #fce4ec;
+    }
+  </style>
+</head>
+<body>
+
+<input type="text" id="searchBox" placeholder="놀이터 이름을 검색하세요" autocomplete="off" />
+<div id="suggestionBox"></div>
+<div id="map"></div>
+
+<script>
+  const map = L.map('map').setView([37.4936, 127.0573], 16);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  const playgroundImages = {
+    "대치아이어파트 보람원앞 유아놀이터": "/images/1.png",
+    "미도아파트 103동 놀이터": "/images/2.png",
+    "미도아파트 105동 놀이터": "/images/3.png",
+    "대치르네상스놀이터": "/images/4.png",
+    "롯데캐슬아파트": "/images/5.png",
+    "구민회관어린이놀이터": "/images/6.png",
+    "선재어린이집 놀이터": "/images/7.png",
+    "보람어린이놀이터": "/images/8.png",
+    "선릉유적": "/images/9.png",
+    "역삼자이아파트102동놀이터": "/images/10.png"
+  };
+
+  const markerMap = {};
+
+  function getMarkerColor(score) {
+    if (score >= 5) return "green";
+    if (score >= 4) return "blue";
+    if (score >= 3) return "orange";
+    return "red";
+  }
+
+  function getGrade(score) {
+    if (score >= 5) return "A";
+    if (score >= 4) return "B";
+    if (score >= 3) return "C";
+    return "D";
+  }
+
+  const star = (n) => "★".repeat(n);
+
+  function toggleFavorite(facilityId) {
+    const el = document.getElementById(`heart-${facilityId}`);
+    if (!el) return;
+    if (el.innerText === "♡") {
+      el.innerText = "❤️";
+      console.log("✅ 찜 추가:", facilityId);
+    } else {
+      el.innerText = "♡";
+      console.log("❌ 찜 해제:", facilityId);
+    }
+  }
+
+  fetch("http://192.168.219.100:8001/playgrounds")
+    .then(response => response.json())
+    .then(data => {
+      data.forEach(p => {
+        const iconColor = getMarkerColor(p.overall_score);
+        const icon = L.icon({
+          iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${iconColor}.png`,
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34]
+        });
+
+        const marker = L.marker([p.latitude, p.longitude], { icon }).addTo(map);
+        markerMap[p.facility_name] = marker;
+
+        const grade = getGrade(p.overall_score);
+        const imageUrl = playgroundImages[p.facility_name] || null;
+
+        const popupHtml = `
+          <div style="font-family: sans-serif; min-width: 260px;">
+            <div style="display: flex; gap: 10px;">
+              ${imageUrl ? `<img src="${imageUrl}" style="width: 100px; height: 80px; object-fit: cover; border-radius: 10px;" />` : ''}
+              <div style="flex: 1;">
+                <h4 style="margin: 0 0 4px 0; font-size: 18px; font-weight: bold; color: #333;">${p.facility_name}</h4>
+                <p style="margin: 0; font-size: 13px; color: #666;">${p.address}</p>
+                <div style="font-weight: bold; font-size: 13px; margin-top: 4px;">
+                  놀이터 위치: <span style="font-weight: normal; color: #555;">${p.location_type}</span>
+                </div>
+              </div>
+            </div>
+
+<div style="margin: 8px 0 4px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+  <!-- 왼쪽: 찜 -->
+  <div style="display: flex; align-items: center;">
+    <span
+      onclick="toggleFavorite('${p.facility_id}')"
+      style="cursor: pointer; font-size: 16px; color: hotpink;"
+      id="heart-${p.facility_id}"
+    >♡</span>
+  </div>
+
+  <!-- 오른쪽: 리뷰보기 -->
+  <span style="font-weight: bold; color: hotpink;">놀이터 리뷰보기 &gt;</span>
+</div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; background: #fff0f5; padding: 8px; border-radius: 10px;">
+              <div style="font-size: 13px; color: #ff69b4;">
+                <div>접근성 : ${star(p.accessibility)}</div>
+                <div>유아 밀집도 : ${star(p.density)}</div>
+                <div>안전도 : ${star(p.safety_score)}</div>
+              </div>
+              <div style="font-size: 36px; font-weight: bold; color: hotpink; margin-left: 10px;">
+                ${grade}
+              </div>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupHtml);
+
+        marker.on('click', () => {
+          map.setView([p.latitude, p.longitude], 18, { animate: true });
+        });
+      });
+    })
+    .catch(err => console.error("❗ 마커 로딩 실패", err));
+
+  // 검색창 입력에 따라 추천 리스트 출력
+  const searchBox = document.getElementById("searchBox");
+  const suggestionBox = document.getElementById("suggestionBox");
+
+  searchBox.addEventListener("input", function () {
+    const query = this.value.trim().toLowerCase();
+    suggestionBox.innerHTML = "";
+
+    if (!query) return;
+
+    const matches = Object.keys(markerMap).filter(name =>
+      name.toLowerCase().includes(query)
+    );
+
+    matches.forEach(name => {
+      const div = document.createElement("div");
+      div.className = "suggestion";
+      div.textContent = name;
+      div.addEventListener("click", () => {
+        const marker = markerMap[name];
+        if (marker) {
+          map.flyTo(marker.getLatLng(), map.getZoom());
+          marker.openPopup();
+          suggestionBox.innerHTML = "";
+          searchBox.value = name;
+        }
+      });
+      suggestionBox.appendChild(div);
+    });
+  });
+</script>
+</body>
+</html>
